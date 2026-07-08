@@ -130,6 +130,7 @@ input.code{text-align:center; font-size:18px; letter-spacing:4px; text-transform
 .bigtap .t3{font-size:14px; letter-spacing:1.5px; color:var(--dim); text-transform:uppercase;}
 .bigtap .lbl{font-size:12px; letter-spacing:2px; color:var(--dim); text-transform:uppercase;}
 .bigtap .bt-bank{font-size:clamp(26px,9vw,40px); font-weight:700; font-variant-numeric:tabular-nums; line-height:1;}
+.bigtap .bt-turnsmall{font-size:clamp(22px,7vw,30px); font-weight:700; font-variant-numeric:tabular-nums; line-height:1;}
 .bigtap .bt-turn{flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:10px;}
 .bigtap .bt-turntime{font-size:clamp(56px,24vw,110px); font-weight:700; font-variant-numeric:tabular-nums; line-height:1;}
 .bigtap .bt-prompt{font-size:clamp(18px,5.5vw,24px); letter-spacing:2px; color:var(--dim); text-transform:uppercase; line-height:1.6;}
@@ -319,11 +320,13 @@ function closeRoom(){
   peer=null; conns=[]; claims={}; roomCode=null; mode="local"; showRoomPanel=false; render();
 }
 function stateMsg(){
+  const key = S.round+"-"+S.turn;
+  const pack = p=>({id:p.id,name:p.name,time:p.time,turns:p.turns,turnTime:p.turnTime,acted:p.lastKey===key,claimed:!!claims[p.id]});
   return {t:"state", screen:S.screen, round:S.round, turn:S.turn, paused:S.paused, bankOn:S.bankOn,
     strategyLeft:S.strategyLeft, breakLeft:S.breakLeft, banks:S.banks, active:S.active,
     players:{
-      blue:S.players.blue.map(p=>({id:p.id,name:p.name,time:p.time,turns:p.turns,turnTime:p.turnTime,claimed:!!claims[p.id]})),
-      orange:S.players.orange.map(p=>({id:p.id,name:p.name,time:p.time,turns:p.turns,turnTime:p.turnTime,claimed:!!claims[p.id]})),
+      blue:S.players.blue.map(pack),
+      orange:S.players.orange.map(pack),
     }};
 }
 function broadcast(){
@@ -953,6 +956,8 @@ function renderClient(){
         <span class="t1">${esc(me.name)}</span>
         <span class="lbl">team bank</span>
         <span class="bt-bank" id="c-mybank" style="color:${CS.bankOn&&myBank<=0?"var(--danger)":"var(--text)"}">${fmt(myBank)}</span>
+        <span class="lbl">this turn</span>
+        <span class="bt-turnsmall" id="c-turnsmall" style="color:${me.acted?COLOR[t]:"var(--dim)"};opacity:${me.acted?1:0.55}">${fmt(myTurn)}</span>
         <span class="bt-turn">
           ${iAmActive? `
             <span class="bt-turntime" id="c-turn" style="color:${COLOR[t]}">${fmt(myTurn)}</span>
@@ -1002,6 +1007,8 @@ function updateClientLive(){
     const me = CS.players[t].find(p=>p.id===myPid);
     const tu=document.getElementById("c-turn");
     if(tu && me){ tu.textContent = fmt(liveVal(me.turnTime, CS.active && CS.active.id===myPid, true)); }
+    const ts=document.getElementById("c-turnsmall");
+    if(ts && me){ ts.textContent = fmt(liveVal(me.turnTime, CS.active && CS.active.id===myPid, true)); }
     const o=document.getElementById("c-oppbank");
     if(o){ o.textContent = fmt(liveVal(CS.banks[opp],run(opp),!CS.bankOn)); }
   }
