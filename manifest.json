@@ -1,0 +1,15 @@
+{
+  "name": "GoA II Table Timer",
+  "short_name": "GoA Timer",
+  "description": "Strategy phase and chess-clock team timer for Guards of Atlantis II",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#081019",
+  "theme_color": "#081019",
+  "icons": [
+    { "src": "./icon-192.png?v=2", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./icon-512.png?v=2", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
