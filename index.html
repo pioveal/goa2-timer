@@ -78,7 +78,10 @@ h1{font-family:'Cinzel',serif; font-size:30px; margin:4px 0 0; font-weight:700; 
 button:focus-visible, input:focus-visible, .tile:focus-visible{outline:2px solid var(--bronze); outline-offset:2px;}
 .btn.selected{background:linear-gradient(180deg,var(--bronze),var(--bronze-dim)); color:#14100A; border-color:var(--bronze);}
 .topbar{display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;}
-.topbar .label{font-family:'Cinzel',serif; letter-spacing:1.5px; font-size:22px; font-weight:700; color:var(--bronze); text-transform:uppercase;}
+.topbar .label{font-family:'Cinzel',serif; letter-spacing:1.5px; font-size:22px; font-weight:700; color:var(--bronze); text-transform:uppercase; display:inline-block;}
+/* one-shot pulse when the turn/round advances, so the change is obvious at a glance */
+@keyframes turnPop{0%{transform:scale(1.35); opacity:0; text-shadow:0 0 24px var(--bronze);} 55%{opacity:1;} 100%{transform:scale(1); opacity:1; text-shadow:none;}}
+.topbar .label.turn-pop{animation:turnPop .7s var(--ease-default); transform-origin:left center;}
 .teams-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
 .team-card{background:var(--panel); border:1px solid; border-radius:16px; padding:12px; display:flex; flex-direction:column; gap:8px;}
 .team-col{border:2px solid; border-radius:16px; padding:12px; display:flex; flex-direction:column; gap:8px; background:var(--panel); transition:background var(--duration-normal) var(--ease-default), border-color var(--duration-normal) var(--ease-default);}
@@ -152,7 +155,7 @@ table.stats td.num, table.stats th.num{text-align:center;}
 .ic{width:1.15em; height:1.15em; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-0.2em;}
 @keyframes pulseDanger{0%,100%{opacity:1;}50%{opacity:.45;}}
 .pulse-danger{animation:pulseDanger 1s ease-in-out infinite;}
-@media (prefers-reduced-motion: reduce){.pulse-danger{animation:none;} .btn,.tile{transition:none;}}
+@media (prefers-reduced-motion: reduce){.pulse-danger{animation:none;} .topbar .label{animation:none;} .btn,.tile{transition:none;}}
 </style>
 </head>
 <body>
@@ -332,7 +335,11 @@ function handleMsg(c,d){
   if(!d || typeof d!=="object") return;
   if(d.t==="claim"){
     const pid = Number(d.pid);
-    if(claims[pid] && claims[pid]!==c.peer){ c.send({t:"claimDenied", pid}); return; }
+    // deny only if the claim's owner is still connected — a phone that dropped
+    // (network loss, page reload) may hold a stale claim the host hasn't
+    // noticed yet, and its player must be re-claimable on reconnect
+    const ownerAlive = claims[pid] && claims[pid]!==c.peer && conns.some(x=>x.peer===claims[pid] && x.open);
+    if(ownerAlive){ c.send({t:"claimDenied", pid}); return; }
     for(const k of Object.keys(claims)) if(claims[k]===c.peer) delete claims[k];
     claims[pid]=c.peer;
     c.send({t:"claimOk", pid});
@@ -366,7 +373,7 @@ function joinRoom(code){
     conn.on("data", d=>{
       if(d.t==="state"){ CS=d; csAt=performance.now(); if(clientScreen==="connecting") clientScreen="pick"; if(clientScreen!=="name") renderClient(); }
       else if(d.t==="claimOk"){ myPid=d.pid; clientScreen="name"; renderClient(); }
-      else if(d.t==="claimDenied"){ joinErr="That player is already taken"; renderClient(); }
+      else if(d.t==="claimDenied"){ joinErr="That player is taken by a connected device"; renderClient(); }
     });
     conn.on("close", ()=>{ joinErr="Connection lost \u2014 rejoin with the code"; clientScreen="join"; myPid=null; CS=null; renderClient(); });
     conn.on("error", ()=>{ clearTimeout(failTimer); fail(); });
@@ -540,6 +547,7 @@ function render(){
   app.classList.toggle("remote", mode==="client");
   app.classList.toggle("menu", mode!=="client" && S.screen==="setup");
   app.classList.toggle("big", mode!=="client" && S.players.blue.length>=4);
+  if(S.screen==="setup") shownTurnKey=""; // don't pulse on a new game's first turn
   modal.innerHTML = mode==="client" ? "" : roomPanel();
   if(mode==="client"){ renderClient(); return; }
   if(S.screen==="setup") renderSetup();
@@ -594,9 +602,14 @@ function roomChip(){
   if(mode==="host") return `<button class="btn ghost small" data-act="room">${ICON.phone} ${roomCode} (${conns.length})</button>`;
   return `<button class="btn ghost small" data-act="room">${ICON.phone} Devices</button>`;
 }
+let shownTurnKey = "";
 function topbar(left){
+  // pulse the label once when the round/turn advances (not on ordinary re-renders)
+  const key = S.round+"-"+S.turn;
+  const pop = shownTurnKey !== "" && shownTurnKey !== key;
+  shownTurnKey = key;
   return `<div class="topbar">
-    <span class="label">${left}</span>
+    <span class="label${pop?" turn-pop":""}">${left}</span>
     <div class="row">
       ${roomChip()}
       <button class="btn ghost small" data-act="undo" ${hist.length? "":"disabled"}>${ICON.undo} Undo</button>
@@ -723,15 +736,16 @@ function renderAction(){
           <div class="plist">
             ${S.players[t].map(pl=>{
               const isActive = teamActive && S.active.id===pl.id;
+              const acted = pl.lastKey === S.round+"-"+S.turn; // set when their clock first starts this turn
               return `
               <button class="tile" data-tap="${pl.id}" data-team="${t}"
                 style="flex-direction:row;justify-content:space-between;align-items:center;gap:8px;border-color:${isActive?COLOR[t]:"var(--panel-soft)"};box-shadow:${isActive?"0 0 14px "+COLOR[t]+"66":"none"};background:${isActive?"#10222F":"#0C1A26"}">
                 <span style="display:flex;flex-direction:column;align-items:flex-start;gap:2px">
                   <span class="nm">${esc(pl.name)}</span>
                   <span class="meta" id="pmeta-${pl.id}">${fmt(pl.time)}</span>
-                  ${isActive?`<span class="think" style="color:${COLOR[t]}">\u25CF thinking</span>`:""}
+                  ${isActive?`<span class="think" style="color:${COLOR[t]}">\u25CF active</span>`:""}
                 </span>
-                <span id="pround-${pl.id}" style="font-size:23px;font-weight:700;color:${COLOR[t]};font-variant-numeric:tabular-nums">${fmt(pl.turnTime)}</span>
+                <span id="pround-${pl.id}" style="font-size:23px;font-weight:700;color:${acted?COLOR[t]:"var(--dim)"};opacity:${acted?1:0.55};font-variant-numeric:tabular-nums">${fmt(pl.turnTime)}</span>
               </button>`;
             }).join("")}
           </div>
@@ -877,10 +891,10 @@ function renderClient(){
         <div class="team-card" style="border-color:${COLOR[t]}55">
           <div class="team-tag" style="color:${COLOR[t]}">${LABEL[t]}</div>
           ${CS.players[t].map(p=>`
-            <button class="tile" data-claim="${p.id}" ${p.claimed?"disabled":""}
-              style="border-color:var(--panel-soft);opacity:${p.claimed?0.4:1}">
+            <button class="tile" data-claim="${p.id}"
+              style="border-color:var(--panel-soft);opacity:${p.claimed?0.55:1}">
               <span class="nm">${esc(p.name)}</span>
-              ${p.claimed?'<span class="meta">taken</span>':""}
+              ${p.claimed?'<span class="meta">taken — tap to reconnect</span>':""}
             </button>`).join("")}
         </div>`).join("")}`;
     return;
@@ -942,7 +956,7 @@ function renderClient(){
         <span class="bt-turn">
           ${iAmActive? `
             <span class="bt-turntime" id="c-turn" style="color:${COLOR[t]}">${fmt(myTurn)}</span>
-            <span class="t3" style="color:${COLOR[t]}">\u25CF thinking \u2014 tap to stop</span>`
+            <span class="t3" style="color:${COLOR[t]}">\u25CF active \u2014 tap to stop</span>`
           : `<span class="bt-prompt">tap to start<br>my clock</span>`}
         </span>
         <span class="bt-stats">${fmt(me.time)} \u00B7 ${me.turns}${me.turns===1?" turn":" turns"}</span>
@@ -953,7 +967,7 @@ function renderClient(){
           <div class="fb-val" style="color:${COLOR[opp]}" id="c-oppbank">${fmt(oppBank)}</div>
         </div>
         <div class="foot-box">
-          <div class="fb-label">now thinking</div>
+          <div class="fb-label">now active</div>
           <div class="fb-val" id="c-running" style="color:${CS.paused?"var(--bronze)":(CS.active?COLOR[CS.active.team]:"var(--dim)")}">${CS.paused?ICON.pause+" Paused":(activeName? esc(activeName):"\u2014")}</div>
         </div>
       </div>`;

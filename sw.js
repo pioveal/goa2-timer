@@ -1,4 +1,4 @@
-const CACHE = "goa2-timer-v21";
+const CACHE = "goa2-timer-v22";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon-192.png?v=2", "./icon-512.png?v=2"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
