@@ -956,8 +956,9 @@ function renderClient(){
         <span class="t1">${esc(me.name)}</span>
         <span class="lbl">team bank</span>
         <span class="bt-bank" id="c-mybank" style="color:${CS.bankOn&&myBank<=0?"var(--danger)":"var(--text)"}">${fmt(myBank)}</span>
+        ${iAmActive? "" : `
         <span class="lbl">this turn</span>
-        <span class="bt-turnsmall" id="c-turnsmall" style="color:${me.acted?COLOR[t]:"var(--dim)"};opacity:${me.acted?1:0.55}">${fmt(myTurn)}</span>
+        <span class="bt-turnsmall" id="c-turnsmall" style="color:${me.acted?COLOR[t]:"var(--dim)"};opacity:${me.acted?1:0.55}">${fmt(myTurn)}</span>`}
         <span class="bt-turn">
           ${iAmActive? `
             <span class="bt-turntime" id="c-turn" style="color:${COLOR[t]}">${fmt(myTurn)}</span>
